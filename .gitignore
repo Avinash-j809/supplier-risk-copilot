@@ -1,0 +1,13 @@
+.env
+output/
+__pycache__/
+.venv/
+*.pyc
+# NHTSA raw file — keep local only, never commit
+FLAT_CMPL.txt
+data/raw/
+# Explicitly DO include these committed files:
+!data/sample_nhtsa.txt
+!examples/sample_output.csv
+# Synthetic placeholder — never commit
+examples/sample_output_SYNTHETIC_DO_NOT_SHIP.csv
