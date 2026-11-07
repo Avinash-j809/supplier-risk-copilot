@@ -1,4 +1,5 @@
 .env
+.vscode/
 output/
 __pycache__/
 .venv/

@@ -98,7 +98,6 @@ Output is written to `output/extracted_risks.csv`.
 
 ## Roadmap
 
-- **Streamlit chat UI** — natural-language queries over extracted risk data
 - **Tool-use agent for SQL** — agentic loop that queries structured risk tables and explains results
 - **GitHub Actions weekly digest** — LLM-written narrative email summarizing new high-severity complaints per supplier
 - **Jira ticket auto-creation** — automatically opens tickets for critical-severity clusters above a threshold
