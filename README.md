@@ -14,7 +14,7 @@ FLAT_CMPL.txt (1.43 GB)
         ▼
   pandas DataFrame
         │
-        ├─ CDESCR (free text) ──► Gemini 3.5 Flash  ◄── response_schema=ExtractedRisk
+        ├─ CDESCR (free text) ──► Gemini 3.5 Flash Lite  ◄── response_schema=ExtractedRisk
         └─ COMPDESC (ground truth)   (concurrent, rate-limited)
                                           │
                                           ▼
@@ -66,9 +66,9 @@ Output is written to `output/extracted_risks.csv`.
 
 `data/sample_nhtsa.txt` contains real rows from the NHTSA corpus (first 50 lines of `FLAT_CMPL.txt`).
 
-> **`examples/sample_output.csv` — not yet committed.** The file currently in `examples/` is labelled `sample_output_SYNTHETIC_DO_NOT_SHIP.csv` and was produced from the synthetic fallback during development; it does not represent real extraction output. Once the Gemini API daily quota resets, run `python extract_risks.py --input data/sample_nhtsa.txt` to generate real output and commit the first 20 rows as `examples/sample_output.csv`.
+`examples/sample_output.csv` contains 20 rows of real NHTSA extraction output (CMPLID 958241 onwards, 1987–1995 era vehicles). Reviewers can inspect it directly without running the pipeline.
 
-> **Free-tier note:** Gemini API free tier has a daily request quota (~50–100 calls/day depending on model). The pipeline is designed for the full 200-row run; use `data/sample_nhtsa.txt` (50 rows) for a quick demo that stays within quota.
+> **Free-tier note:** Gemini API free tier has a daily request quota (~50–100 calls/day depending on model). The pipeline runs the full 200-row sample against the real file; use `data/sample_nhtsa.txt` (50 rows) for a quick demo that stays within free-tier quota.
 
 ## Built on
 
@@ -85,7 +85,7 @@ Output is written to `output/extracted_risks.csv`.
 
 **Why two numbers?** When COMPDESC is passed as context, the model sometimes copies the ground-truth tag verbatim into its `component` output, inflating the agreement score. The unbiased run (flag `--no-compdesc-context`) removes COMPDESC from the prompt entirely, so the 58% reflects how well the LLM infers component from raw complaint text alone — a more honest capability benchmark.
 
-*Output is from a 200-row sample of the ~900K-row corpus. Full corpus processing would require a paid API tier.*
+*Metrics are from a 50-row sample of the ~900K-row corpus run against `data/sample_nhtsa.txt`. Full corpus processing (200 rows via reservoir sampling) uses the same pipeline against the raw 1.43 GB file.*
 
 ## Roadmap
 
