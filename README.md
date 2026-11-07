@@ -62,6 +62,15 @@ python extract_risks.py --input data/sample_nhtsa.txt
 python extract_risks.py --input nonexistent.txt
 ```
 
+### Streamlit Chat UI
+
+```bash
+pip install streamlit>=1.31.0   # if not already installed
+streamlit run streamlit_app.py
+```
+
+Opens a chat interface at `http://localhost:8501`. Loads `output/extracted_risks.csv` automatically; falls back to `examples/sample_output.csv` if the pipeline hasn't been run yet. Ask questions like *"Which manufacturers have the most critical complaints?"* or *"What are the common failure modes for braking systems?"*
+
 Output is written to `output/extracted_risks.csv`.
 
 `data/sample_nhtsa.txt` contains real rows from the NHTSA corpus (first 50 lines of `FLAT_CMPL.txt`).
