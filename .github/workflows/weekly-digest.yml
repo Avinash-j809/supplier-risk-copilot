@@ -1,0 +1,40 @@
+name: Weekly Supplier Risk Digest
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"   # Every Monday at 09:00 UTC
+  workflow_dispatch:        # Manual trigger via Actions tab → Run workflow
+
+jobs:
+  generate-digest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Generate digest
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python weekly_digest.py
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supplier-risk-digest-${{ steps.date.outputs.date }}
+          path: |
+            output/digest_*.md
+            output/digest_*.json
+          if-no-files-found: error

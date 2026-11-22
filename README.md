@@ -71,6 +71,22 @@ streamlit run streamlit_app.py
 
 Opens a tool-use agent chat at `http://localhost:8501`. Instead of stuffing the entire dataset into the prompt, the LLM calls from 5 registered tools — severity distribution, top makes by severity, component search, complaint detail lookup, and full-text search over complaint text — before synthesizing a final answer (max 5 iterations per question). Each response includes a collapsed **Tool calls** expander showing which functions fired, their arguments, row counts returned, and a 3-row preview of results. Falls back to `examples/sample_output.csv` if the extraction pipeline hasn't been run yet.
 
+### Weekly Digest Automation
+
+A GitHub Actions workflow generates a supplier risk digest automatically every week.
+
+**Schedule:** Every Monday at 09:00 UTC. To trigger manually: GitHub → **Actions** tab → **Weekly Supplier Risk Digest** → **Run workflow**.
+
+**What it generates** (under `output/`):
+- `digest_YYYY-MM-DD.md` — Markdown report with executive summary, top-manufacturer callouts (with CMPLID citations), and a ranked watch list
+- `digest_YYYY-MM-DD.json` — structured output with the same content (top-10 table + narrative fields + metadata)
+
+**Where to find it:** GitHub → **Actions** tab → select a completed run → scroll to **Artifacts** → download `supplier-risk-digest-YYYY-MM-DD`.
+
+**Setup:** Add `GEMINI_API_KEY` as a repository secret (Settings → Secrets and variables → Actions → New repository secret). The workflow falls back to `examples/sample_output.csv` when `output/extracted_risks.csv` is not present (i.e., when extraction has not been run as part of the workflow).
+
+> Email delivery is a roadmap item — artifact upload is the delivery mechanism for this iteration.
+
 Output is written to `output/extracted_risks.csv`.
 
 `data/sample_nhtsa.txt` contains real rows from the NHTSA corpus (first 50 lines of `FLAT_CMPL.txt`).
