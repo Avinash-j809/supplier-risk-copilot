@@ -1,4 +1,4 @@
-# Interview Notes — Supplier Risk Co-pilot
+# Design Notes — Supplier Risk Co-pilot
 
 Quick-reference for "walk me through this choice" questions.
 
@@ -25,3 +25,11 @@ Pydantic v2 is the validation library the Google GenAI SDK uses internally for i
 COMPDESC is NHTSA's own structured component tag, assigned by trained analysts who read the same complaint text the LLM reads. It is consistent and covers every row without additional labelling effort, making it a cheap proxy for a labelled test set. However, when COMPDESC is also passed to the LLM as prompt context ("reference only"), the model sometimes copies the tag verbatim into its `component` output — the pipeline saw this on rows with CMPLID 958244, where the LLM returned the COMPDESC string exactly. That inflates the agreement score to 90%, which overstates the LLM's actual extraction capability.
 
 The `--no-compdesc-context` flag removes COMPDESC from the prompt so the LLM reads complaint text alone. That run scored 58%, which is the honest number — it reflects how well the model infers component category from raw, unstructured text with no hint. Both numbers are reported: 90% as an upper bound showing how well the pipeline performs when NHTSA context is available, and 58% as the unbiased capability baseline. In an interview, leading with 58% and explaining the methodology is more credible than leading with 90%.
+
+## 6. Why tool-use (function-calling) instead of context stuffing in the Streamlit chat UI?
+
+Context stuffing — loading the entire extracted CSV into the system prompt before every question — works for small datasets but has three problems at scale: (1) token cost grows linearly with the dataset, so a 200-row extraction already pushes 10K+ tokens per query; (2) the LLM cannot "search" its context window, so precision for narrow questions like "show complaints about fuel systems" degrades as noise grows; (3) the full context is hidden from the user, so there is no transparency into what data the answer is based on.
+
+Tool-use inverts the architecture. The LLM is given 5 registered functions — `get_severity_distribution`, `get_top_makes_by_severity`, `get_complaints_by_component`, `get_complaint_detail`, `search_complaints_text` — and decides at inference time which ones to call and with what arguments, based solely on the question. The DataFrame never enters the prompt; only the rows the LLM specifically asked for do, as structured JSON function-response objects. This caps per-query token cost at a small constant regardless of dataset size, makes filtering precise and reproducible, and surfaces every tool call in the UI so the user can verify the answer.
+
+The agent loop (max 5 iterations) handles multi-step questions: the model can call `get_severity_distribution`, see that "critical" has the most complaints, then immediately call `get_top_makes_by_severity(severity="critical")` in the same turn without the user prompting for the follow-up. The function schemas are generated automatically from the Python function signatures and docstrings by the Google GenAI SDK — no manual JSON Schema writing required.

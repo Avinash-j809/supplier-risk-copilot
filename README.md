@@ -69,7 +69,7 @@ pip install streamlit>=1.31.0   # if not already installed
 streamlit run streamlit_app.py
 ```
 
-Opens a chat interface at `http://localhost:8501`. Loads `output/extracted_risks.csv` automatically; falls back to `examples/sample_output.csv` if the pipeline hasn't been run yet. Ask questions like *"Which manufacturers have the most critical complaints?"* or *"What are the common failure modes for braking systems?"*
+Opens a tool-use agent chat at `http://localhost:8501`. Instead of stuffing the entire dataset into the prompt, the LLM calls from 5 registered tools — severity distribution, top makes by severity, component search, complaint detail lookup, and full-text search over complaint text — before synthesizing a final answer (max 5 iterations per question). Each response includes a collapsed **Tool calls** expander showing which functions fired, their arguments, row counts returned, and a 3-row preview of results. Falls back to `examples/sample_output.csv` if the extraction pipeline hasn't been run yet.
 
 Output is written to `output/extracted_risks.csv`.
 
