@@ -85,7 +85,7 @@ A GitHub Actions workflow generates a supplier risk digest automatically every w
 
 **Setup:** Add `GEMINI_API_KEY` as a repository secret (Settings → Secrets and variables → Actions → New repository secret). The workflow falls back to `examples/sample_output.csv` when `output/extracted_risks.csv` is not present (i.e., when extraction has not been run as part of the workflow).
 
-> Email delivery is a roadmap item — artifact upload is the delivery mechanism for this iteration.
+The workflow also emails the digest to `DIGEST_RECIPIENT` if three Gmail secrets are set (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `DIGEST_RECIPIENT`). Email delivery is best-effort; if credentials are missing or SMTP fails, the workflow still produces the artifact.
 
 Output is written to `output/extracted_risks.csv`.
 
