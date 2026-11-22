@@ -1,6 +1,6 @@
 # Supplier Risk Co-pilot
 
-This project extends a prior [Automobile Supply Chain Risk Analytics](https://github.com/avinash/automobile-supply-chain-risk) work (300 suppliers, 900K NHTSA records, Python + SQL Server + Power BI) by adding an LLM extraction layer over unstructured vehicle-complaint text. It samples 200 rows from the 1.43 GB NHTSA flat file, calls Gemini concurrently for structured risk extraction (component, failure mode, severity, root-cause hypothesis), and evaluates LLM output against NHTSA's own ground-truth component tags — producing CV-ready metrics without any labelled data.
+This project extends a prior [Automobile Supply Chain Risk Analytics](https://github.com/Avinash-j809/Auto-Supply-Chain-Risk-Analytics) work (300 suppliers, 900K NHTSA records, Python + SQL Server + Power BI) by adding an LLM extraction layer over unstructured vehicle-complaint text. It samples up to 200 rows from the 1.43 GB NHTSA flat file (50-row demo configuration shown in the metrics below), calls Gemini concurrently for structured risk extraction (component, failure mode, severity, root-cause hypothesis), and evaluates LLM output against NHTSA's own ground-truth component tags — producing CV-ready metrics without any labelled data.
 
 ## Architecture
 
@@ -85,7 +85,8 @@ A GitHub Actions workflow generates a supplier risk digest automatically every w
 
 **Setup:** Add `GEMINI_API_KEY` as a repository secret (Settings → Secrets and variables → Actions → New repository secret). The workflow falls back to `examples/sample_output.csv` when `output/extracted_risks.csv` is not present (i.e., when extraction has not been run as part of the workflow).
 
-The workflow also emails the digest to `DIGEST_RECIPIENT` if three Gmail secrets are set (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `DIGEST_RECIPIENT`). Email delivery is best-effort; if credentials are missing or SMTP fails, the workflow still produces the artifact.
+**Email delivery (optional):**
+If three Gmail secrets are set (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `DIGEST_RECIPIENT`), the workflow emails the digest to `DIGEST_RECIPIENT` via Gmail SMTP. The emailed version includes the Markdown digest in the body plus both files (.md and .json) as attachments. Delivery is best-effort — if credentials are missing or SMTP fails, the workflow still produces the artifact.
 
 Output is written to `output/extracted_risks.csv`.
 
@@ -114,11 +115,8 @@ Output is written to `output/extracted_risks.csv`.
 
 ## Roadmap
 
-- **Tool-use agent for SQL** — agentic loop that queries structured risk tables and explains results
-- **GitHub Actions weekly digest** — LLM-written narrative email summarizing new high-severity complaints per supplier
-- **Jira ticket auto-creation** — automatically opens tickets for critical-severity clusters above a threshold
 - **Full corpus ingestion** — batch processing of all 900K complaints with paid API tier
 
 ## Prior work
 
-This builds on [Automobile Supply Chain Risk Analytics](#) — a Power BI + SQL Server dashboard tracking defect trends across 300 suppliers using 900K NHTSA complaints. This project adds the LLM extraction layer on top of that raw data to convert unstructured complaint text into structured risk signals.
+This builds on [Automobile Supply Chain Risk Analytics](https://github.com/Avinash-j809/Auto-Supply-Chain-Risk-Analytics) — a Power BI + SQL Server dashboard tracking defect trends across 300 suppliers using 900K NHTSA complaints. This project adds the LLM extraction layer on top of that raw data to convert unstructured complaint text into structured risk signals.
