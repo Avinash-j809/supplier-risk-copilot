@@ -50,11 +50,15 @@ def main() -> None:
     md_text  = md_path.read_text(encoding="utf-8")
     date_str = md_path.stem.replace("digest_", "")  # "YYYY-MM-DD"
 
+    # Pull subject from first line of the digest; strip Markdown heading markers ("# ")
+    first_line = md_text.splitlines()[0] if md_text.strip() else ""
+    subject = first_line.lstrip("#").strip() or f"Supplier Risk Digest — {date_str}"
+
     # Build multipart message: plain-text body + two file attachments
     msg = MIMEMultipart()
     msg["From"]    = gmail_user
     msg["To"]      = recipient
-    msg["Subject"] = f"Supplier Risk Watch List — {date_str}"
+    msg["Subject"] = subject
     msg.attach(MIMEText(md_text, "plain", "utf-8"))
 
     for path in [md_path, json_path]:
