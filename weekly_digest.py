@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import RetryError, retry, stop_after_attempt, wait_exponential
 
 load_dotenv()
 
@@ -40,6 +40,15 @@ class DigestNarrative(BaseModel):
 _gen_config = types.GenerateContentConfig(
     response_mime_type="application/json",
     response_schema=DigestNarrative,
+)
+
+_STUB_NARRATIVE = DigestNarrative(
+    executive_summary=(
+        "Narrative generation unavailable for this run (upstream LLM service returned "
+        "sustained 5xx errors after 3 retries). Top-10 watch list data below is valid regardless."
+    ),
+    top_manufacturers="(narrative unavailable)",
+    recommendation="(narrative unavailable)",
 )
 
 
@@ -106,7 +115,8 @@ def _call_gemini(client: genai.Client, prompt: str) -> DigestNarrative:
 
 def generate_narrative(
     df: pd.DataFrame, watch_list: list[dict], client: genai.Client
-) -> DigestNarrative:
+) -> tuple[DigestNarrative, bool]:
+    """Return (narrative, llm_ok). On sustained Gemini failure, llm_ok=False and stub is returned."""
     top3 = "\n".join(
         f"  - {r['MFR_NAME']}: example CMPLIDs {', '.join(_sample_cmplids(df, r['MFR_NAME']))} "
         f"(score={r['weighted_score']}, critical={r['critical']}, high={r['high']})"
@@ -125,7 +135,12 @@ def generate_narrative(
         "- recommendation: One actionable sentence for the procurement team.\n"
         "Be specific and cite only the data provided. Do not invent complaint details."
     )
-    return _call_gemini(client, prompt)
+    try:
+        return _call_gemini(client, prompt), True
+    except RetryError as exc:
+        cause = exc.last_attempt.exception()
+        print(f"Gemini unavailable after 3 retries ({type(cause).__name__}: {cause}) — using stub narrative.", flush=True)
+        return _STUB_NARRATIVE, False
 
 
 def write_outputs(
@@ -175,9 +190,10 @@ def main() -> None:
     df, source = load_data(args.data)
     watch_list = compute_watch_list(df)
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    narrative = generate_narrative(df, watch_list, client)
+    narrative, llm_ok = generate_narrative(df, watch_list, client)
     md_path, _ = write_outputs(watch_list, narrative, source)
-    print(f"Digest generated: {md_path}, {len(watch_list)} manufacturers tracked")
+    status = "with narrative" if llm_ok else "with stub narrative (LLM unavailable)"
+    print(f"Digest generated {status}: {md_path}, {len(watch_list)} manufacturers tracked")
 
 
 if __name__ == "__main__":
