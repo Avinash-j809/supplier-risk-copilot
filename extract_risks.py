@@ -1,7 +1,7 @@
 """
 Supplier Risk Co-pilot — LLM extraction pipeline over NHTSA vehicle complaints.
 
-Samples 200 rows from the 1.43 GB NHTSA flat file via one-pass reservoir
+Samples up to 500 rows from the 1.43 GB NHTSA flat file via one-pass reservoir
 sampling, calls Gemini 2.5 Flash concurrently for structured risk extraction,
 evaluates LLM output against NHTSA ground-truth COMPDESC, and writes
 output/extracted_risks.csv.
@@ -37,7 +37,7 @@ load_dotenv()
 # Config
 # ---------------------------------------------------------------------------
 MODEL_ID = "gemini-3.5-flash-lite"
-SAMPLE_SIZE = 200
+SAMPLE_SIZE = 500
 RESERVOIR_SEED = 42
 MAX_CONCURRENT = 3   # simultaneous Gemini calls
 # With MAX_CONCURRENT=3 slots, each slot sleeps RATE_SLEEP seconds after the
@@ -104,9 +104,9 @@ def _get_client() -> genai.Client:
 
 
 # ---------------------------------------------------------------------------
-# Synthetic fallback — 50 realistic NHTSA-style rows for demo without real file
+# Synthetic fallback — 500 realistic NHTSA-style rows for demo without real file
 # ---------------------------------------------------------------------------
-def _synthetic_df(n: int = 50) -> pd.DataFrame:
+def _synthetic_df(n: int = 500) -> pd.DataFrame:
     rng = random.Random(42)
     mfrs  = ["Ford Motor Company", "General Motors LLC", "Toyota Motor Corp", "Honda Motor Co"]
     makes = ["FORD", "GMC", "TOYOTA", "HONDA"]
@@ -263,16 +263,39 @@ def main() -> None:
         help="Exclude COMPDESC from the prompt (CDESCR only). Agreement score is then unbiased "
              "because the LLM cannot copy the ground-truth tag into its own output.",
     )
+    parser.add_argument(
+        "--fresh", action="store_true",
+        help="Delete output/extracted_risks.csv before running, forcing a full re-run.",
+    )
     args = parser.parse_args()
 
     global _use_compdesc_ctx
     _use_compdesc_ctx = not args.no_compdesc_context
     mode_label = "CDESCR only — unbiased" if args.no_compdesc_context else "CDESCR + COMPDESC hint"
 
+    out_path = "output/extracted_risks.csv"
+    Path("output").mkdir(exist_ok=True)
+
+    if args.fresh and Path(out_path).exists():
+        Path(out_path).unlink()
+        print("--fresh: deleted existing output, starting clean run.")
+
+    # Checkpoint: load any prior progress so we can skip already-processed rows.
+    existing_cmplids: set[str] = set()
+    write_header = True
+    if Path(out_path).exists():
+        try:
+            existing_df = pd.read_csv(out_path)
+            if not existing_df.empty and "CMPLID" in existing_df.columns:
+                existing_cmplids = set(existing_df["CMPLID"].astype(str))
+                write_header = False
+        except Exception:
+            pass
+
     real_file = Path(args.input).exists()
     if not real_file:
-        print(f"Input '{args.input}' not found — running on synthetic fallback (50 rows).")
-        df = _synthetic_df(50)
+        print(f"Input '{args.input}' not found — running on synthetic fallback (500 rows).")
+        df = _synthetic_df(500)
     else:
         # Read only the first 2 lines to confirm format; never load the full file
         with open(args.input, encoding="latin-1", errors="replace") as fh:
@@ -282,35 +305,58 @@ def main() -> None:
         lines = _reservoir_sample(args.input)
         df = _lines_to_df(lines)
 
+    # Filter out already-processed CMPLIDs and report resume state.
+    if existing_cmplids:
+        df = df[~df["CMPLID"].astype(str).isin(existing_cmplids)].reset_index(drop=True)
+        print(
+            f"Resuming from existing output: {len(existing_cmplids)} rows already done, "
+            f"{len(df)} to process"
+        )
+
     n_rows = len(df)
+    if n_rows == 0:
+        print("All rows already processed. Use --fresh to force a full re-run.")
+        return
+
     print(f"Extracting risks for {n_rows} rows via Gemini ({MAX_CONCURRENT} concurrent, ~9 RPM) [{mode_label}] ...")
 
+    empty = {"component": None, "failure_mode": None, "severity": None, "inferred_root_cause": None}
     t0 = time.monotonic()
     results: list[dict | None] = [None] * n_rows
+    batch_rows: list[dict] = []
+    failures = 0
 
     with ThreadPoolExecutor(max_workers=MAX_CONCURRENT) as pool:
         futures = {pool.submit(_extract_one, df.iloc[i]): i for i in range(n_rows)}
         done = 0
         for future in as_completed(futures):
-            results[futures[future]] = future.result()
+            i = futures[future]
+            result = future.result()
+            if result is None:
+                failures += 1
+            results[i] = result
+
+            row = df.iloc[i].to_dict()
+            row.update(result or empty)
+            batch_rows.append(row)
             done += 1
+
+            # Flush to disk every 25 completions so a crash loses at most 25 rows.
+            if len(batch_rows) >= 25 or done == n_rows:
+                pd.DataFrame(batch_rows).to_csv(out_path, mode='a', header=write_header, index=False)
+                write_header = False
+                batch_rows.clear()
+
             if done % 10 == 0:
                 print(f"  {done}/{n_rows} complete ...")
 
-    elapsed  = time.monotonic() - t0
-    failures = sum(1 for r in results if r is None)
+    elapsed = time.monotonic() - t0
+    print(f"Saved: {out_path}")
 
-    empty = {"component": None, "failure_mode": None, "severity": None, "inferred_root_cause": None}
     out_df = pd.concat(
         [df.reset_index(drop=True), pd.DataFrame([r or empty for r in results])],
         axis=1,
     )
-
-    Path("output").mkdir(exist_ok=True)
-    out_path = "output/extracted_risks.csv"
-    out_df.to_csv(out_path, index=False)
-    print(f"Saved: {out_path}")
-
     valid_df  = out_df.dropna(subset=["component"])
     agreement = _agreement_score(valid_df) if len(valid_df) else 0.0
     avg_lat   = elapsed / max(n_rows - failures, 1)

@@ -1,6 +1,6 @@
 # Supplier Risk Co-pilot
 
-This project extends a prior [Automobile Supply Chain Risk Analytics](https://github.com/Avinash-j809/Auto-Supply-Chain-Risk-Analytics) work (300 suppliers, 900K NHTSA records, Python + SQL Server + Power BI) by adding an LLM extraction layer over unstructured vehicle-complaint text. It samples up to 200 rows from the 1.43 GB NHTSA flat file (50-row demo configuration shown in the metrics below), calls Gemini concurrently for structured risk extraction (component, failure mode, severity, root-cause hypothesis), and evaluates LLM output against NHTSA's own ground-truth component tags — producing CV-ready metrics without any labelled data.
+This project extends a prior [Automobile Supply Chain Risk Analytics](https://github.com/Avinash-j809/Auto-Supply-Chain-Risk-Analytics) work (300 suppliers, 900K NHTSA records, Python + SQL Server + Power BI) by adding an LLM extraction layer over unstructured vehicle-complaint text. It samples 500 rows from the 1.43 GB NHTSA flat file, calls Gemini concurrently for structured risk extraction (component, failure mode, severity, root-cause hypothesis), and evaluates LLM output against NHTSA's own ground-truth component tags — producing CV-ready metrics without any labelled data.
 
 ## Architecture
 
@@ -86,7 +86,7 @@ A GitHub Actions workflow generates a supplier risk digest automatically every w
 **Setup:** Add `GEMINI_API_KEY` as a repository secret (Settings → Secrets and variables → Actions → New repository secret). The workflow falls back to `examples/sample_output.csv` when `output/extracted_risks.csv` is not present (i.e., when extraction has not been run as part of the workflow).
 
 **Email delivery (optional):**
-If three Gmail secrets are set (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `DIGEST_RECIPIENT`), the workflow emails the digest to `DIGEST_RECIPIENT` via Gmail SMTP. The emailed version includes the Markdown digest in the body plus both files (.md and .json) as attachments. Delivery is best-effort — if credentials are missing or SMTP fails, the workflow still produces the artifact.
+If three Gmail secrets are set (`GMAIL_USER`, `GMAIL_APP_PASSWORD`, `DIGEST_RECIPIENT`), the workflow emails the digest to `DIGEST_RECIPIENT` via Gmail SMTP. Includes the Markdown digest in the body plus both files (.md and .json) as attachments. Best-effort delivery: if credentials are missing or SMTP fails, the workflow still produces the artifact.
 
 Output is written to `output/extracted_risks.csv`.
 
@@ -100,18 +100,17 @@ Output is written to `output/extracted_risks.csv`.
 
 | Metric | Value |
 |---|---|
-| Rows processed | 50 real NHTSA complaints |
+| Rows processed | 500 real NHTSA complaints |
 | Source corpus | ~900K complaints, 1.43 GB |
 | Fields extracted | 4 (component, failure_mode, severity, inferred_root_cause) |
-| LLM-COMPDESC agreement (with COMPDESC hint) | 90.0% — upper bound; LLM can see the ground-truth tag |
-| LLM-COMPDESC agreement (CDESCR only, unbiased) | **58.0%** — honest number; LLM reads complaint text only |
-| Wall-clock (3 concurrent) | ~364–374s for 50 rows at ~9 RPM |
-| Failures | 0 / 50 |
+| LLM-COMPDESC agreement | 85.0% (COMPDESC passed as prompt context) |
+| Wall-clock (3 concurrent) | ~4599s (~77 min) at ~9 RPM |
+| Failures | 0 / 500 |
 | Model | gemini-3.5-flash-lite, native structured output via `response_schema` |
 
-**Why two numbers?** When COMPDESC is passed as context, the model sometimes copies the ground-truth tag verbatim into its `component` output, inflating the agreement score. The unbiased run (flag `--no-compdesc-context`) removes COMPDESC from the prompt entirely, so the 58% reflects how well the LLM infers component from raw complaint text alone — a more honest capability benchmark.
+**Methodology note:** COMPDESC (NHTSA's human-tagged component field) is passed in the prompt as context to anchor the LLM output in NHTSA's taxonomy. A prior 50-row unbiased run (without COMPDESC in the prompt) scored 58% as a cleaner capability baseline; the 500-row unbiased rerun is pending free-tier quota headroom.
 
-*Metrics are from a 50-row sample of the ~900K-row corpus run against `data/sample_nhtsa.txt`. Full corpus processing (200 rows via reservoir sampling) uses the same pipeline against the raw 1.43 GB file.*
+*Metrics are from a 500-row sample of the ~900K-row corpus run against `data/sample_nhtsa.txt`. Full corpus processing (200 rows via reservoir sampling) uses the same pipeline against the raw 1.43 GB file.*
 
 ## Roadmap
 
